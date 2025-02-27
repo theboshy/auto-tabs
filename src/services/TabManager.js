@@ -1,8 +1,12 @@
+import { SettingsService } from './SettingsService.js';
+
 export class TabManager {
     constructor() {
         this.tabGroups = new Map();
         this.tabColors = new Map();
         this.observers = new Set();
+        this.settings = SettingsService.getInstance();
+        this.domainTabs = new Map();
     }
 
     addObserver(observer) {
@@ -21,18 +25,23 @@ export class TabManager {
         try {
             const urlObj = new URL(url);
             const parts = urlObj.hostname.split('.');
-            if (parts.length > 2 && parts[0] !== 'www') {
-                return parts.slice(-2).join('.');
-            }
-            return parts.slice(-2).join('.').replace('www.', '');
+            const baseDomain = parts.slice(-2).join('.');
+            return {
+                full: urlObj.hostname,
+                base: baseDomain,
+                isSubdomain: parts.length > 2
+            };
         } catch (e) {
             console.error('Error extracting domain:', e);
             return null;
         }
     }
 
-    createGroupName(domain) {
-        return domain.split('.')[0].charAt(0).toUpperCase() + domain.split('.')[0].slice(1);
+    createGroupName(domainInfo) {
+        const baseName = domainInfo.full.split('.')[0];
+        return baseName === 'www' 
+            ? domainInfo.base.split('.')[0].charAt(0).toUpperCase() + domainInfo.base.split('.')[0].slice(1)
+            : baseName.charAt(0).toUpperCase() + baseName.slice(1);
     }
 
     setTabColor(domain, color) {
@@ -40,14 +49,27 @@ export class TabManager {
         this.notifyObservers('colorUpdated', { domain, color });
     }
 
+    async updateDomainTabs(tab) {
+        const domainInfo = this.extractDomain(tab.url);
+        if (!domainInfo) return null;
+
+        if (!this.domainTabs.has(domainInfo.base)) {
+            this.domainTabs.set(domainInfo.base, new Set());
+        }
+        this.domainTabs.get(domainInfo.base).add(tab.id);
+
+        return domainInfo;
+    }
+
     async handleTab(tab) {
-        if (!tab.url || tab.url.startsWith('chrome://')) return;
+        if (!this.settings.isEnabled() || !tab.url || tab.url.startsWith('chrome://')) return;
 
-        const domain = this.extractDomain(tab.url);
-        if (!domain) return;
+        const domainInfo = await this.updateDomainTabs(tab);
+        if (!domainInfo) return;
 
+        const tabsInDomain = this.domainTabs.get(domainInfo.base).size;
         const existingGroup = Array.from(this.tabGroups.entries())
-            .find(([_, groupDomain]) => groupDomain === domain);
+            .find(([_, groupDomain]) => groupDomain === domainInfo.base);
 
         try {
             if (existingGroup) {
@@ -57,17 +79,16 @@ export class TabManager {
                     tabIds: tab.id
                 });
                 this.notifyObservers('tabGrouped', { tabId: tab.id, groupId });
-            } else {
-                const color = this.tabColors.get(domain) || 'grey';
-                const groupId = await chrome.tabs.group({
-                    tabIds: tab.id
-                });
+            } else if (tabsInDomain >= 2) {
+                const color = this.tabColors.get(domainInfo.base) || 'grey';
+                const tabIds = Array.from(this.domainTabs.get(domainInfo.base));
+                const groupId = await chrome.tabs.group({ tabIds });
                 await chrome.tabGroups.update(groupId, {
-                    title: this.createGroupName(domain),
+                    title: this.createGroupName(domainInfo),
                     color: color
                 });
-                this.tabGroups.set(groupId, domain);
-                this.notifyObservers('groupCreated', { groupId, domain, color });
+                this.tabGroups.set(groupId, domainInfo.base);
+                this.notifyObservers('groupCreated', { groupId, domain: domainInfo.base, color });
             }
         } catch (error) {
             console.error('Error handling tab:', error);
@@ -76,7 +97,23 @@ export class TabManager {
     }
 
     removeGroup(groupId) {
+        const domain = this.tabGroups.get(groupId);
+        if (domain) {
+            this.domainTabs.delete(domain);
+        }
         this.tabGroups.delete(groupId);
         this.notifyObservers('groupRemoved', { groupId });
+    }
+
+    async cleanup() {
+        for (const [groupId] of this.tabGroups) {
+            try {
+                await chrome.tabGroups.ungroup(groupId);
+            } catch (error) {
+                console.error('Error ungrouping tabs:', error);
+            }
+        }
+        this.tabGroups.clear();
+        this.domainTabs.clear();
     }
 } 

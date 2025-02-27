@@ -7,10 +7,11 @@
     "tabs",
     "storage",
     "activeTab",
-    "tabGroups"
+    "tabGroups",
+    "windows"
 ],
 "action": {
-    "default_popup": "popup.html",
+    "default_popup": "src/popup.html",
     "default_icon": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -31,6 +32,10 @@
     "matches": ["<all_urls>"],
     "js": ["src/content.js"]
     }
-]
+],
+"web_accessible_resources": [{
+    "resources": ["src/services/*.js"],
+    "matches": ["<all_urls>"]
+}]
 }
 

@@ -1,14 +1,31 @@
 import { TabManager } from './services/TabManager.js';
 import { ColorService } from './services/ColorService.js';
 import { Logger } from './services/Logger.js';
+import { SettingsService } from './services/SettingsService.js';
 
 class BackgroundScript {
     constructor() {
         this.tabManager = new TabManager();
         this.colorService = ColorService.getInstance();
         this.logger = Logger.getInstance();
+        this.settings = SettingsService.getInstance();
         
-        this.initializeEventListeners();
+        this.initialize();
+    }
+
+    async initialize() {
+        try {
+            const settings = await this.settings.waitForInitialization();
+            this.logger.info('Background script initialized with settings:', settings);
+            
+            this.initializeEventListeners();
+
+            if (!settings.isEnabled) {
+                await this.tabManager.cleanup();
+            }
+        } catch (error) {
+            this.logger.error('Error initializing background script:', error);
+        }
     }
 
     initializeEventListeners() {
@@ -31,11 +48,24 @@ class BackgroundScript {
                 this.logger.info(`Tab manager event: ${event}`, data);
             }
         });
+
+        this.settings.addObserver({
+            update: async (event, data) => {
+                if (event === 'settingsUpdated') {
+                    this.logger.info('Settings updated', data);
+                    if (!data.isEnabled) {
+                        await this.tabManager.cleanup();
+                    }
+                }
+            }
+        });
     }
 
     async handleTabUpdate(tab) {
         try {
-            await this.tabManager.handleTab(tab);
+            if (this.settings.isEnabled()) {
+                await this.tabManager.handleTab(tab);
+            }
         } catch (error) {
             this.logger.error('Error handling tab update', { error, tab });
         }
@@ -43,11 +73,11 @@ class BackgroundScript {
 
     handleMessage(message, sender) {
         if (message.type === 'primaryColor' && sender.tab) {
-            const domain = this.tabManager.extractDomain(message.url);
-            if (domain) {
+            const domainInfo = this.tabManager.extractDomain(message.url);
+            if (domainInfo) {
                 const chromeColor = this.colorService.findClosestChromeColor(message.color);
-                this.tabManager.setTabColor(domain, chromeColor);
-                this.logger.info('Color updated for domain', { domain, color: chromeColor });
+                this.tabManager.setTabColor(domainInfo.base, chromeColor);
+                this.logger.info('Color updated for domain', { domain: domainInfo.base, color: chromeColor });
             }
         }
     }
