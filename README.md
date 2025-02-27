@@ -29,7 +29,7 @@ Auto Tabs is a powerful Chrome extension that automatically organizes your brows
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/auto-tabs.git
+git clone https://github.com/theboshy/auto-tabs.git
 cd auto-tabs
 ```
 
@@ -57,5 +57,5 @@ cd auto-tabs
 ---
 
 <div align="center">
-Made with ❤️ by [Your Name]
+Made with ❤️ by Peter Lobo
 </div> 
