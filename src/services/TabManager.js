@@ -1,5 +1,6 @@
 import { SettingsService } from './SettingsService.js';
 import { Logger } from './Logger.js';
+import { TabColorService } from './TabColorService.js';
 
 export class TabManager {
     constructor() {
@@ -8,7 +9,9 @@ export class TabManager {
         this.observers = new Set();
         this.settings = SettingsService.getInstance();
         this.logger = Logger.getInstance();
+        this.colorService = TabColorService.getInstance();
         this.domainTabs = new Map();
+        this.pendingColors = new Map();
     }
 
     addObserver(observer) {
@@ -52,6 +55,35 @@ export class TabManager {
         
         this.logger.debug('Group name created', { domainInfo, groupName });
         return groupName;
+    }
+
+    updateGroupColor(url, rawColor) {
+        const domainInfo = this.extractDomain(url);
+        if (!domainInfo) return 'purple';
+
+        const chromeColor = this.colorService.getClosestChromeColor(rawColor);
+        this.setTabColor(domainInfo.base, chromeColor);
+
+        const existingGroup = Array.from(this.tabGroups.entries())
+            .find(([_, groupDomain]) => groupDomain === domainInfo.base);
+
+        if (existingGroup) {
+            const [groupId] = existingGroup;
+            chrome.tabGroups.update(groupId, { color: chromeColor })
+                .catch(error => this.logger.error('Failed to update group color', { 
+                    error: error.message,
+                    groupId,
+                    color: chromeColor
+                }));
+        } else {
+            this.pendingColors.set(domainInfo.base, chromeColor);
+            this.logger.debug('Stored pending color for domain', { 
+                domain: domainInfo.base, 
+                color: chromeColor 
+            });
+        }
+
+        return chromeColor;
     }
 
     setTabColor(domain, color) {
@@ -112,11 +144,12 @@ export class TabManager {
                 });
                 this.notifyObservers('tabGrouped', { tabId: tab.id, groupId });
             } else if (tabsInDomain >= 2) {
-                const color = this.tabColors.get(domainInfo.base) || 'grey';
                 const tabIds = Array.from(this.domainTabs.get(domainInfo.base));
                 const groupId = await chrome.tabs.group({ tabIds });
                 
                 const groupName = this.createGroupName(domainInfo);
+                const color = this.updateGroupColor(tab.url, { r: 128, g: 0, b: 128 }); // Default to purple
+
                 await chrome.tabGroups.update(groupId, {
                     title: groupName,
                     color: color
@@ -131,6 +164,8 @@ export class TabManager {
                     tabCount: tabIds.length
                 });
                 this.notifyObservers('groupCreated', { groupId, domain: domainInfo.base, color });
+                
+                this.pendingColors.delete(domainInfo.base);
             }
         } catch (error) {
             this.logger.error('Failed to handle tab', { 
@@ -147,6 +182,7 @@ export class TabManager {
         const domain = this.tabGroups.get(groupId);
         if (domain) {
             this.domainTabs.delete(domain);
+            this.pendingColors.delete(domain);
             this.logger.info('Domain tabs cleared', { domain, groupId });
         }
         this.tabGroups.delete(groupId);
@@ -173,6 +209,7 @@ export class TabManager {
         
         this.tabGroups.clear();
         this.domainTabs.clear();
+        this.pendingColors.clear();
         this.logger.info('Cleanup completed', { 
             clearedGroups: groupCount,
             remainingGroups: this.tabGroups.size,
