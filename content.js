@@ -1,4 +1,3 @@
-// Function to get the dominant color from an image
 function getImageColor(imgElement) {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
@@ -26,7 +25,6 @@ function getImageColor(imgElement) {
     };
 }
 
-// Function to extract color from meta tags
 function getMetaThemeColor() {
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (metaThemeColor) {
@@ -35,7 +33,6 @@ function getMetaThemeColor() {
     return null;
 }
 
-// Function to get favicon color
 function getFaviconColor() {
     const favicon = document.querySelector('link[rel="icon"], link[rel="shortcut icon"]');
     if (favicon) {
@@ -53,25 +50,20 @@ function getFaviconColor() {
     return Promise.resolve(null);
 }
 
-// Main function to get the website's primary color
 async function getPrimaryColor() {
-    // Try meta theme color first
     const metaColor = getMetaThemeColor();
     if (metaColor) {
         return metaColor;
     }
 
-    // Try favicon color
     const faviconColor = await getFaviconColor();
     if (faviconColor) {
         return `rgb(${faviconColor.r}, ${faviconColor.g}, ${faviconColor.b})`;
     }
 
-    // Default color if nothing else works
     return '#666666';
 }
 
-// Send the color to the background script
 getPrimaryColor().then(color => {
     chrome.runtime.sendMessage({
         type: 'primaryColor',

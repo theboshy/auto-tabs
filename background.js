@@ -2,7 +2,6 @@
 let tabGroups = new Map();
 let tabColors = new Map();
 
-// Function to extract domain from URL
 function extractDomain(url) {
     try {
         const urlObj = new URL(url);
@@ -16,12 +15,10 @@ function extractDomain(url) {
     }
 }
 
-// Function to create a human-readable name from domain
 function createGroupName(domain) {
     return domain.split('.')[0].charAt(0).toUpperCase() + domain.split('.')[0].slice(1);
 }
 
-// Function to convert color string to RGB object
 function parseColor(color) {
     if (color.startsWith('#')) {
         const r = parseInt(color.slice(1, 3), 16);
@@ -35,7 +32,6 @@ function parseColor(color) {
     return null;
 }
 
-// Function to find the closest Chrome color
 function findClosestChromeColor(color) {
     const chromeColors = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan'];
     const colorValues = {
@@ -70,7 +66,6 @@ function findClosestChromeColor(color) {
     return closestColor;
 }
 
-// Handle new tabs and group them
 async function handleTab(tab) {
     if (!tab.url || tab.url.startsWith('chrome://')) return;
 
@@ -81,14 +76,12 @@ async function handleTab(tab) {
         .find(([_, groupDomain]) => groupDomain === domain);
 
     if (existingGroup) {
-        // Add to existing group
         const [groupId] = existingGroup;
         await chrome.tabs.group({
             groupId: groupId,
             tabIds: tab.id
         });
     } else {
-        // Create new group
         const color = tabColors.get(domain) || 'grey';
         const groupId = await chrome.tabs.group({
             tabIds: tab.id
@@ -101,14 +94,12 @@ async function handleTab(tab) {
     }
 }
 
-// Listen for tab updates
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete') {
         handleTab(tab);
     }
 });
 
-// Listen for messages from content script
 chrome.runtime.onMessage.addListener((message, sender) => {
     if (message.type === 'primaryColor' && sender.tab) {
         const domain = extractDomain(message.url);
@@ -118,7 +109,6 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     }
 });
 
-// Clean up when groups are removed
 chrome.tabGroups.onRemoved.addListener((group) => {
     tabGroups.delete(group.id);
 }); 
