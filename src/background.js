@@ -1,12 +1,10 @@
 import { TabManager } from './services/TabManager.js';
-import { ColorService } from './services/ColorService.js';
 import { Logger } from './services/Logger.js';
 import { SettingsService } from './services/SettingsService.js';
 
 class BackgroundScript {
     constructor() {
         this.tabManager = new TabManager();
-        this.colorService = ColorService.getInstance();
         this.logger = Logger.getInstance();
         this.settings = SettingsService.getInstance();
         
@@ -68,17 +66,6 @@ class BackgroundScript {
             }
         } catch (error) {
             this.logger.error('Error handling tab update', { error, tab });
-        }
-    }
-
-    handleMessage(message, sender) {
-        if (message.type === 'primaryColor' && sender.tab) {
-            const domainInfo = this.tabManager.extractDomain(message.url);
-            if (domainInfo) {
-                const chromeColor = this.colorService.findClosestChromeColor(message.color);
-                this.tabManager.setTabColor(domainInfo.base, chromeColor);
-                this.logger.info('Color updated for domain', { domain: domainInfo.base, color: chromeColor });
-            }
         }
     }
 

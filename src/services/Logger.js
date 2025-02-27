@@ -1,60 +1,65 @@
 export class Logger {
-    static instance = null;
+    static #instance = null;
     
-    constructor() {
-        if (Logger.instance) {
-            return Logger.instance;
-        }
-        this.logs = [];
-        Logger.instance = this;
-    }
-
     static getInstance() {
-        if (!Logger.instance) {
-            Logger.instance = new Logger();
+        if (!Logger.#instance) {
+            Logger.#instance = new Logger();
         }
-        return Logger.instance;
+        return Logger.#instance;
     }
 
-    log(level, message, data = {}) {
-        const logEntry = {
-            timestamp: new Date().toISOString(),
+    constructor() {
+        if (Logger.#instance) {
+            return Logger.#instance;
+        }
+        this.levels = {
+            debug: 0,
+            info: 1,
+            warn: 2,
+            error: 3
+        };
+        this.currentLevel = this.levels.debug;
+        Logger.#instance = this;
+    }
+
+    setLevel(level) {
+        if (this.levels.hasOwnProperty(level)) {
+            this.currentLevel = this.levels[level];
+        }
+    }
+
+    formatMessage(level, message, data = {}) {
+        const timestamp = new Date().toISOString();
+        return {
+            timestamp,
             level,
             message,
-            data
+            ...data
         };
-        
-        this.logs.push(logEntry);
-        
-        switch (level) {
-            case 'error':
-                console.error(message, data);
-                break;
-            case 'warn':
-                console.warn(message, data);
-                break;
-            case 'info':
-                console.info(message, data);
-                break;
-            default:
-                console.log(message, data);
+    }
+
+    debug(message, data = {}) {
+        if (this.currentLevel <= this.levels.debug) {
+            console.debug(this.formatMessage('debug', message, data));
+        }
+    }
+
+    info(message, data = {}) {
+        if (this.currentLevel <= this.levels.info) {
+            console.info(this.formatMessage('info', message, data));
+        }
+    }
+
+    warn(message, data = {}) {
+        if (this.currentLevel <= this.levels.warn) {
+            console.warn(this.formatMessage('warn', message, data));
         }
     }
 
     error(message, data = {}) {
-        this.log('error', message, data);
-    }
-
-    warn(message, data = {}) {
-        this.log('warn', message, data);
-    }
-
-    info(message, data = {}) {
-        this.log('info', message, data);
-    }
-
-    debug(message, data = {}) {
-        this.log('debug', message, data);
+        if (this.currentLevel <= this.levels.error) {
+            console.error(this.formatMessage('error', message, data));
+        }
     }
 
     getLogs() {
